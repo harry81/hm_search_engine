@@ -8,6 +8,8 @@ has waived all copyright and related or neighboring rights to this work.
 
 See: http://creativecommons.org/publicdomain/zero/1.0/
 """
+import sys
+import getopt
 
 import sgmllib
 import urllib, sgmllib
@@ -45,24 +47,40 @@ class MyParser(sgmllib.SGMLParser):
         return self.hyperlinks
 
 
-
-# Get something to work with.
-f = urlopen("http://www.naver.com")
-s = f.read()
-
-# Try and process the page.
-# The class should have been defined first, remember.
-myparser = MyParser()
-myparser.parse(s)
-
 lst = set()
-# Get the hyperlinks.
-for lnks in  myparser.get_hyperlinks():
-    if string.find(lnks, 'http') == 0:
-        lst.add(lnks)
 
-for lnk in lst:
-    print lnk
+def main():
+    start_page = "http://www.tistory.com"
+    
+    try:
+        opts, args = getopt.getopt(sys.argv[1:], "h:g", ["help","go"])
+    except getopt.error, msg:
+        print msg
+        print "for help use --help"
+        sys.exit(2)
+
+    for o, a in opts:
+        if o in ("-h", "--help"):
+            print __doc__
+            sys.exit(0)
+
+        elif o in ("-g", "--go"):
+            start_page = args[0]
+            
+
+    print 'start_page : ' , start_page
+    f = urlopen(start_page)
+    s = f.read()
+    
+    myparser = MyParser()
+    myparser.parse(s)
+        
+    for lnks in  myparser.get_hyperlinks():
+        if string.find(lnks, 'http') == 0:
+            process(lnks)
+            lst.add(lnks)
+
+def get_page(lnk):
     try:
         response = urlopen(lnk)
         
@@ -73,13 +91,24 @@ for lnk in lst:
     except URLError, e:
         print 'We failed to reach a server.'
         print 'Reason: ', e.reason
-
+        
     except BadStatusLine, e:
         print 'a server responds with a HTTP status code that we don\'t understand'
         print 'Reason: ', e
-
+        
     except IOError as (errno, strerror):
         print "I/O error({0}): {1}".format(errno, strerror)
+            
 
-    # print response.read()
-    
+def process(lnk):
+    print lnk
+    if lnk in lst:
+        print 'already exists'
+        pass
+    else:
+        get_page(lnk)
+        lst.add(lnk)
+            
+
+if __name__ == "__main__":
+    main()
