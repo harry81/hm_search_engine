@@ -10,15 +10,45 @@ See: http://creativecommons.org/publicdomain/zero/1.0/
 """
 import sys
 import getopt
+from types import *
 
 import sgmllib
 import urllib, sgmllib
 import string
-from sets import Set
 
 from urllib2 import Request, urlopen, URLError, HTTPError
 from httplib import BadStatusLine
 
+lst = []
+stack = []
+
+start_page = "http://www.tistory.com"
+
+def main():
+    # options
+    try:
+        opts, args = getopt.getopt(sys.argv[1:], "h:g", ["help","go"])
+    except getopt.error, msg:
+        print msg
+        print "for help use --help"
+        sys.exit(2)
+
+    for o, a in opts:
+        if o in ("-h", "--help"):
+            print __doc__
+            sys.exit(0)
+
+        elif o in ("-g", "--go"):
+            start_page = args[0]
+
+    # verify the start page
+    start_page = process_arg(start_page)
+    print 'start_page : ' , start_page
+
+    stack.append(start_page)
+
+    while( len(stack) > 0):
+        parse_doc()
 
 class MyParser(sgmllib.SGMLParser):
     "A simple parser class."
@@ -47,68 +77,57 @@ class MyParser(sgmllib.SGMLParser):
         return self.hyperlinks
 
 
-lst = set()
+def parse_doc():
+    page = stack.pop()
+    print   len(stack) , ' : parse' ,  page
 
-def main():
-    start_page = "http://www.tistory.com"
-    
+    ## check url errors
     try:
-        opts, args = getopt.getopt(sys.argv[1:], "h:g", ["help","go"])
-    except getopt.error, msg:
-        print msg
-        print "for help use --help"
-        sys.exit(2)
-
-    for o, a in opts:
-        if o in ("-h", "--help"):
-            print __doc__
-            sys.exit(0)
-
-        elif o in ("-g", "--go"):
-            start_page = args[0]
-            
-
-    print 'start_page : ' , start_page
-    f = urlopen(start_page)
-    s = f.read()
-    
-    myparser = MyParser()
-    myparser.parse(s)
-        
-    for lnks in  myparser.get_hyperlinks():
-        if string.find(lnks, 'http') == 0:
-            process(lnks)
-            lst.add(lnks)
-
-def get_page(lnk):
-    try:
-        response = urlopen(lnk)
+        f = urlopen( page )
+        s = f.read()
         
     except HTTPError, e:
         print 'The server couldn\'t fulfill the request.'
         print 'Error code: ', e.code
+        return 
         
     except URLError, e:
         print 'We failed to reach a server.'
         print 'Reason: ', e.reason
-        
+        return
+
     except BadStatusLine, e:
         print 'a server responds with a HTTP status code that we don\'t understand'
         print 'Reason: ', e
-        
+        return
+    
     except IOError as (errno, strerror):
         print "I/O error({0}): {1}".format(errno, strerror)
-            
+        return   
+    
+    myparser = MyParser()
 
-def process(lnk):
-    print lnk
-    if lnk in lst:
-        print 'already exists'
-        pass
-    else:
-        get_page(lnk)
-        lst.add(lnk)
-            
+    try:
+        myparser.parse(s)
+    except sgmllib.SGMLParseError, e:
+        print "sgmllib.SGMLParseError"
+        return
+    
+    lst.append(page)
+        
+    for lnk in  myparser.get_hyperlinks():
+        if string.find(lnk, 'http') == 0:
+            if lnk in lst:
+#                print 'already exists'
+                pass
+            else:
+                stack.append(lnk)
+
+def process_arg(lnk):
+    if not 'http' in lnk:
+        lnk = 'http://' + lnk
+
+    return lnk
 
 if __name__ == "__main__":
     main()
