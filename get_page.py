@@ -12,20 +12,24 @@ See: http://creativecommons.org/publicdomain/zero/1.0/
 import sys
 import getopt
 from types import *
+from collections import deque
+from time import gmtime, strftime
 
 import sgmllib
 import urllib, sgmllib
 import string
 
 from urllib2 import Request, urlopen, URLError, HTTPError
-from httplib import BadStatusLine
+from httplib import BadStatusLine, IncompleteRead
 
-lst = []
-stack = []
+lst = []                                # a list for visited
+queue = deque()                         # a queue which will be visit.
+                                        # queue (parent page, current page, error or message)
 
-start_page = "http://www.tistory.com"
+start_page = "http://www.tistory.com"   # start point
 
 def main():
+    global log_fd
     # options
     try:
         opts, args = getopt.getopt(sys.argv[1:], "h:g", ["help","go"])
@@ -46,9 +50,9 @@ def main():
     start_page = process_arg(start_page)
     print 'start_page : ' , start_page
 
-    stack.append(start_page)
+    queue.append(('.',start_page,'start'))
 
-    while( len(stack) > 0):
+    while( len(queue) > 0):
         parse_doc()
 
 class MyParser(sgmllib.SGMLParser):
@@ -79,15 +83,19 @@ class MyParser(sgmllib.SGMLParser):
 
 
 def parse_doc():
-    page = stack.pop()
+    log_fd = get_log_filename ( start_page )        
+    # get an element to do
+    parent_page, cur_page, err  = queue.popleft()
     error = 'ok'
-    print   len(lst), len(stack) , ' : parse' ,  page
+    mesg = "{0} {1} {2} [{3}] {4}\n".format(len(lst), len(queue) , strftime("%d %H:%M:%S", gmtime()), parent_page, cur_page)
+    print mesg
     
-    lst.append(page)
+    log_fd.write(mesg)
+    log_fd.close()
 
-    ## check url errors
+    ## get a content from that file.
     try:
-        f = urlopen( page )
+        f = urlopen( cur_page )
         s = f.read()
         
     except HTTPError, e:
@@ -108,11 +116,16 @@ def parse_doc():
         return
     
     except IOError as (errno, strerror):
-        print 
         error = "I/O error({0}): {1}".format(errno, strerror)
-        print error          
+        print error
 
+    except IncompleteRead , e:
+        error = 'IncompleteRead'
+        print error
+
+    # stop doing when cur_page is bad.
     if error != 'ok':
+        lst.append( ( parent_page, cur_page, error) )
         return
     
     myparser = MyParser()
@@ -122,20 +135,32 @@ def parse_doc():
     except sgmllib.SGMLParseError, e:
         print "sgmllib.SGMLParseError"
         return    
-        
+
+    # add all links in the currnt page into queue.
+    cnt = 0
     for lnk in  myparser.get_hyperlinks():
         if string.find(lnk, 'http') == 0:
             if lnk in lst:
-#                print 'already exists'
                 pass
             else:
-                stack.append(lnk)
+                queue.append((cur_page, lnk, 'ok'))
+                cnt = cnt + 1
+
+    #  put cur_page into lst list to mark it as visited.
+    lst.append( ( parent_page, cur_page, cnt ) )
+
+    if cnt != 0 :
+        print "[", cur_page ,"] added " ,  cnt , "links"
 
 def process_arg(lnk):
     if not 'http' in lnk:
         lnk = 'http://' + lnk
 
     return lnk
+
+def get_log_filename(name):
+    fr = open('text.txt','ab')    
+    return fr
 
 if __name__ == "__main__":
     main()
