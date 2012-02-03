@@ -80,7 +80,10 @@ class MyParser(sgmllib.SGMLParser):
 
 def parse_doc():
     page = stack.pop()
-    print   len(stack) , ' : parse' ,  page
+    error = 'ok'
+    print   len(lst), len(stack) , ' : parse' ,  page
+    
+    lst.append(page)
 
     ## check url errors
     try:
@@ -88,23 +91,29 @@ def parse_doc():
         s = f.read()
         
     except HTTPError, e:
-        print 'The server couldn\'t fulfill the request.'
+        error = 'The server couldn\'t fulfill the request.'
+        print error
         print 'Error code: ', e.code
-        return 
         
     except URLError, e:
-        print 'We failed to reach a server.'
+        error = 'We failed to reach a server.'
+        print error        
         print 'Reason: ', e.reason
         return
 
     except BadStatusLine, e:
-        print 'a server responds with a HTTP status code that we don\'t understand'
+        error = 'a server responds with a HTTP status code that we don\'t understand'
+        print error  
         print 'Reason: ', e
         return
     
     except IOError as (errno, strerror):
-        print "I/O error({0}): {1}".format(errno, strerror)
-        return   
+        print 
+        error = "I/O error({0}): {1}".format(errno, strerror)
+        print error          
+
+    if error != 'ok':
+        return
     
     myparser = MyParser()
 
@@ -112,9 +121,7 @@ def parse_doc():
         myparser.parse(s)
     except sgmllib.SGMLParseError, e:
         print "sgmllib.SGMLParseError"
-        return
-    
-    lst.append(page)
+        return    
         
     for lnk in  myparser.get_hyperlinks():
         if string.find(lnk, 'http') == 0:
